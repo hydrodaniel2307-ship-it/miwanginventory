@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sanitizeDecorItem, type DecorItem } from "@/lib/map-layout";
+import { sanitizeDecorItem, generateDefaultRackLayout, RACK_LAYOUT_MIN_ITEMS, type DecorItem } from "@/lib/map-layout";
 import { createClient } from "@/lib/supabase/admin";
 import { isMissingColumnError, isMissingTableError } from "@/lib/supabase-errors";
 
 const DEFAULT_WAREHOUSE_ID = "main";
-const LEGACY_ORG_ID = process.env.INTERNAL_ORG_ID?.trim() || "miwang-main";
+const LEGACY_ORG_ID = process.env.INTERNAL_ORG_ID?.trim() ?? "";
+if (!LEGACY_ORG_ID) throw new Error("INTERNAL_ORG_ID (uuid) is required");
+
+
 const MAX_ITEMS = 10000;
 const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024;
 
@@ -14,6 +17,7 @@ type LayoutResponse = {
     version: number;
     updatedAt: string | null;
     items: DecorItem[];
+    seeded?: boolean;
   };
 };
 
@@ -62,7 +66,8 @@ function buildLayoutResponse(
   warehouseId: string,
   version: number,
   updatedAt: string | null,
-  items: DecorItem[]
+  items: DecorItem[],
+  seeded?: boolean
 ): LayoutResponse {
   return {
     data: {
@@ -70,6 +75,7 @@ function buildLayoutResponse(
       version,
       updatedAt,
       items,
+      ...(seeded ? { seeded: true } : {}),
     },
   };
 }
@@ -175,13 +181,30 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const items = parseDecorItems(data?.layout_json ?? []) ?? [];
+  const dbItems = parseDecorItems(data?.layout_json ?? []) ?? [];
+
+  // If DB has fewer items than the minimum rack layout, return the
+  // deterministic seed for display BUT do NOT write it to DB.
+  // The `seeded` flag tells the frontend this is generated, not saved.
+  if (dbItems.length < RACK_LAYOUT_MIN_ITEMS) {
+    const seed = generateDefaultRackLayout();
+    return NextResponse.json(
+      buildLayoutResponse(
+        warehouseId,
+        data?.version ?? 0,
+        data?.updated_at ?? null,
+        seed,
+        true
+      )
+    );
+  }
+
   return NextResponse.json(
     buildLayoutResponse(
       warehouseId,
       data?.version ?? 1,
       data?.updated_at ?? null,
-      items
+      dbItems
     )
   );
 }
@@ -195,13 +218,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let payload: { warehouseId?: unknown; warehouse?: unknown; items?: unknown };
+  let payload: {
+    warehouseId?: unknown;
+    warehouse?: unknown;
+    items?: unknown;
+    mode?: unknown;
+  };
   try {
-    payload = JSON.parse(bodyText) as {
-      warehouseId?: unknown;
-      warehouse?: unknown;
-      items?: unknown;
-    };
+    payload = JSON.parse(bodyText) as typeof payload;
   } catch {
     return NextResponse.json(
       { error: "요청 본문 JSON 형식이 올바르지 않습니다." },
@@ -217,19 +241,23 @@ export async function POST(request: NextRequest) {
         : DEFAULT_WAREHOUSE_ID
   );
 
-  const items = parseDecorItems(payload.items);
-  if (!items) {
+  const incomingItems = parseDecorItems(payload.items);
+  if (!incomingItems) {
     return NextResponse.json(
       { error: "items 배열 형식이 올바르지 않습니다." },
       { status: 400 }
     );
   }
 
+  // mode: "overwrite" (default) — replace all items
+  //        "merge"              — append incoming to existing, dedup by id
+  const mode = payload.mode === "merge" ? "merge" : "overwrite";
+
   const supabase = createClient();
 
   const { data: current, error: readError } = await supabase
     .from("warehouse_map_layouts")
-    .select("version")
+    .select("version, layout_json")
     .eq("warehouse_id", warehouseId)
     .maybeSingle();
 
@@ -246,7 +274,7 @@ export async function POST(request: NextRequest) {
         .upsert(
           {
             org_id: LEGACY_ORG_ID,
-            layout_data: items,
+            layout_data: incomingItems,
             updated_at: now,
           },
           { onConflict: "org_id" }
@@ -261,7 +289,7 @@ export async function POST(request: NextRequest) {
           code: legacyWriteError.code,
           message: legacyWriteError.message,
           warehouseId,
-          itemCount: items.length,
+          itemCount: incomingItems.length,
         });
 
         return NextResponse.json(
@@ -271,7 +299,7 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json(
-        buildLayoutResponse(warehouseId, 1, now, items)
+        buildLayoutResponse(warehouseId, 1, now, incomingItems)
       );
     }
 
@@ -285,6 +313,20 @@ export async function POST(request: NextRequest) {
       { error: "레이아웃 저장 준비 중 오류가 발생했습니다." },
       { status: 500 }
     );
+  }
+
+  // Resolve final items based on mode
+  let items: DecorItem[];
+  if (mode === "merge") {
+    const existingItems = parseDecorItems(current?.layout_json ?? []) ?? [];
+    const existingIds = new Set(existingItems.map((i) => i.id));
+    const newOnly = incomingItems.filter((i) => !existingIds.has(i.id));
+    items = [...existingItems, ...newOnly];
+    if (items.length > MAX_ITEMS) {
+      items = items.slice(0, MAX_ITEMS);
+    }
+  } else {
+    items = incomingItems;
   }
 
   const nextVersion = Math.max(1, (current?.version ?? 0) + 1);

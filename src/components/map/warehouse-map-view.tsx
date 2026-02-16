@@ -155,6 +155,7 @@ function EditorToolbarDesktop({
     decorItems,
     hasChanges,
     selectedDecorId,
+    resetToDefaultLayout,
   } = useEditor();
 
   if (!editorMode) return null;
@@ -408,6 +409,16 @@ function EditorToolbarDesktop({
             disabled={decorItems.length === 0}
           >
             전체 초기화
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={resetToDefaultLayout}
+          >
+            <LayoutGrid className="size-3.5" />
+            기본 레이아웃
           </Button>
         </div>
       </div>
@@ -746,6 +757,7 @@ function MobileActionsTab() {
     setShowSaveModal,
     discardChanges,
     requestExit,
+    resetToDefaultLayout,
     selectedDecorId,
     decorItems,
     hasChanges,
@@ -812,6 +824,15 @@ function MobileActionsTab() {
       >
         <Save className="size-4" />
         저장
+      </Button>
+
+      <Button
+        variant="outline"
+        className="h-11 w-full gap-2 text-sm"
+        onClick={resetToDefaultLayout}
+      >
+        <LayoutGrid className="size-4" />
+        기본 레이아웃
       </Button>
 
       <div className="grid grid-cols-3 gap-2">

@@ -15,6 +15,7 @@ import {
   DEFAULT_TOOL_BY_KIND,
   clampCoord,
   clampSize,
+  generateDefaultRackLayout,
   makeDecorId,
   sanitizeDecorItem,
   type DecorItem,
@@ -34,6 +35,7 @@ type LayoutGetResponse = {
     version: number;
     updatedAt: string | null;
     items: unknown[];
+    seeded?: boolean;
   };
   error?: string;
 };
@@ -98,8 +100,11 @@ export type EditorContextType = {
   undo: () => void;
   redo: () => void;
 
+  isSeeded: boolean;
+
   saveLayout: () => Promise<boolean>;
   reloadLayout: () => Promise<void>;
+  resetToDefaultLayout: () => void;
   discardChanges: () => void;
   requestExit: () => void;
   confirmExit: () => void;
@@ -165,6 +170,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [version, setVersion] = useState(1);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [isSeeded, setIsSeeded] = useState(false);
 
   const [visualMode, setVisualMode] = useState<"dark" | "bright">("dark");
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -244,6 +250,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       }
 
       const items = parseDecorItems(payload?.data?.items ?? []);
+      const seeded = payload?.data?.seeded === true;
 
       setDecorItemsRaw(items);
       setUndoStack([]);
@@ -252,6 +259,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setChangeCounter(0);
       setVersion(payload?.data?.version ?? 1);
       setUpdatedAt(payload?.data?.updatedAt ?? null);
+      setIsSeeded(seeded);
       savedSnapshotRef.current = JSON.stringify(items);
     } catch (error) {
       const message = error instanceof Error
@@ -503,6 +511,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     toast.info("변경 사항을 취소했습니다.");
   }, []);
 
+  const resetToDefaultLayout = useCallback(() => {
+    const seed = generateDefaultRackLayout();
+    setDecorItems(seed);
+    setSelectedDecorId(null);
+    setIsSeeded(false);
+    toast.success("기본 레이아웃으로 초기화했습니다. 저장하세요.");
+  }, [setDecorItems]);
+
   const requestExit = useCallback(() => {
     if (changeCounter > 0) {
       setShowExitModal(true);
@@ -566,8 +582,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       clearAllDecor,
       undo,
       redo,
+      isSeeded,
       saveLayout,
       reloadLayout: loadLayout,
+      resetToDefaultLayout,
       discardChanges,
       requestExit,
       confirmExit,
@@ -602,6 +620,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       elapsedSeconds,
       version,
       updatedAt,
+      isSeeded,
       setEditorMode,
       setKind,
       updateTool,
@@ -615,6 +634,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       redo,
       saveLayout,
       loadLayout,
+      resetToDefaultLayout,
       discardChanges,
       requestExit,
       confirmExit,

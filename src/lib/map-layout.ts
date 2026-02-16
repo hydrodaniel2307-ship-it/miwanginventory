@@ -55,3 +55,38 @@ export function sanitizeDecorItem(item: DecorItem): DecorItem {
   };
 }
 
+/**
+ * Generate the default warehouse rack layout.
+ * Creates 11 shelf rows (one per face), each spanning 10 bays.
+ * Coordinates match the 3D scene cell positioning:
+ *   x = bay center, z = (faceNo - 1) * 3.0 - 15.0
+ */
+export const RACK_LAYOUT_MIN_ITEMS = 50;
+
+export function generateDefaultRackLayout(): DecorItem[] {
+  const FACE_COUNT = 11;
+  const RACK_WIDTH = 10;
+  const RACK_DEPTH = 2;
+  const RACK_HEIGHT = 4;
+  const FACE_SPACING = 3.0;
+  const Z_OFFSET = -15.0;
+
+  const items: DecorItem[] = [];
+
+  for (let face = 1; face <= FACE_COUNT; face++) {
+    const z = (face - 1) * FACE_SPACING + Z_OFFSET;
+    items.push({
+      id: `rack-face-${face}`,
+      kind: "shelf",
+      x: 0,
+      z,
+      width: RACK_WIDTH,
+      depth: RACK_DEPTH,
+      height: RACK_HEIGHT,
+      rotationY: 0,
+    });
+  }
+
+  return items;
+}
+
