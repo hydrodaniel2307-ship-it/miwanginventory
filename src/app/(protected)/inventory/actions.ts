@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/admin";
+import { isMissingColumnError } from "@/lib/supabase-errors";
 
 export type InventoryRow = {
   id: string;
@@ -140,4 +141,32 @@ export async function deleteInventoryItem(id: string) {
   revalidatePath("/inventory");
   revalidatePath("/dashboard");
   return { error: null };
+}
+
+export type ProductOption = {
+  id: string;
+  name: string;
+  sku: string;
+};
+
+export async function getProductsForSelect(): Promise<ProductOption[]> {
+  const supabase = createClient();
+
+  const baseQuery = () =>
+    supabase
+      .from("products")
+      .select("id, name, sku")
+      .order("name", { ascending: true });
+
+  let { data, error } = await baseQuery().eq("active", true);
+
+  if (error && isMissingColumnError(error, "products", "active")) {
+    const fallback = await baseQuery();
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) throw new Error(error.message);
+
+  return data ?? [];
 }

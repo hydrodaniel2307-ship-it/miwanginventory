@@ -1,27 +1,32 @@
-import { getInventoryList, getInventorySummary } from "./actions";
+import { getInventoryList, getInventorySummary, getProductsForSelect } from "./actions";
 import { getReorderSuggestions } from "./reorder-actions";
 import { InventoryList } from "./inventory-list";
 import { ReorderPanel } from "@/components/inventory/reorder-panel";
+import { AddInventoryDialog } from "@/components/inventory/add-inventory-dialog";
 import { Package, AlertTriangle, DollarSign } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function InventoryPage() {
-  const [items, summary, reorderSuggestions] = await Promise.all([
+  const [items, summary, reorderSuggestions, products] = await Promise.all([
     getInventoryList(),
     getInventorySummary(),
     getReorderSuggestions(),
+    getProductsForSelect(),
   ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2.5">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-          <Package className="size-[18px] text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+            <Package className="size-[18px] text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">재고 목록</h1>
+            <p className="text-[13px] text-muted-foreground">전체 재고를 확인하세요</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">재고 목록</h1>
-          <p className="text-[13px] text-muted-foreground">전체 재고를 확인하세요</p>
-        </div>
+        <AddInventoryDialog products={products} />
       </div>
 
       {/* Summary cards */}

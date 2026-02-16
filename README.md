@@ -34,3 +34,28 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Release Checklist
+
+1. Quality gates
+```bash
+pnpm lint
+pnpm build
+```
+
+2. Database migrations applied (Supabase Dashboard SQL Editor)
+- Run `supabase/migrations/013_mvp_single_layout.sql`
+- Confirm `warehouse_map_layouts` exists with columns:
+  - `warehouse_id`
+  - `version`
+  - `layout_json`
+  - `updated_at`
+
+3. Smoke test API endpoints (logged-in session required)
+```bash
+# warehouse layout read
+curl -i "http://localhost:3001/api/editor/layout?warehouse=main"
+
+# warehouse layout save (upsert)
+curl -i -X POST "http://localhost:3001/api/editor/layout" -H "Content-Type: application/json" -d "{\"warehouseId\":\"main\",\"items\":[]}"
+```

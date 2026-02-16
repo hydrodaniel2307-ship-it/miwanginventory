@@ -3,7 +3,7 @@ import type { WarehouseFace, WarehouseLocation } from "@/lib/types/database";
 
 export const FACE_MIN = 1;
 export const FACE_MAX = 11;
-export const DEFAULT_BAY_COUNT = 5;
+export const DEFAULT_BAY_COUNT = 10;
 export const DEFAULT_LEVEL_COUNT = 4;
 
 export const STAGE_IN_CODE = "STAGE-IN";
@@ -171,30 +171,53 @@ async function ensureDefaultFaces(
 ): Promise<void> {
   const { data, error } = await supabase
     .from("warehouse_faces")
-    .select("face_no")
+    .select("face_no, bay_count, level_count")
     .eq("org_id", orgId);
 
   if (error) throw new Error(error.message);
 
-  const existing = new Set<number>((data ?? []).map((row) => row.face_no));
-  const rows: Omit<WarehouseFace, "id" | "created_at" | "updated_at">[] = [];
+  const existingMap = new Map<number, { bay_count: number; level_count: number }>(
+    (data ?? []).map((row) => [row.face_no, row])
+  );
+
+  const toInsert: Omit<WarehouseFace, "id" | "created_at" | "updated_at">[] = [];
+  const toUpdateFaceNos: number[] = [];
 
   for (let faceNo = FACE_MIN; faceNo <= FACE_MAX; faceNo += 1) {
-    if (existing.has(faceNo)) continue;
-    rows.push({
-      org_id: orgId,
-      face_no: faceNo,
-      name: `선반 ${faceNo}`,
-      bay_count: DEFAULT_BAY_COUNT,
-      level_count: DEFAULT_LEVEL_COUNT,
-      active: true,
-    });
+    const existing = existingMap.get(faceNo);
+    if (!existing) {
+      toInsert.push({
+        org_id: orgId,
+        face_no: faceNo,
+        name: `선반 ${faceNo}`,
+        bay_count: DEFAULT_BAY_COUNT,
+        level_count: DEFAULT_LEVEL_COUNT,
+        active: true,
+      });
+    } else if (
+      existing.bay_count < DEFAULT_BAY_COUNT ||
+      existing.level_count < DEFAULT_LEVEL_COUNT
+    ) {
+      toUpdateFaceNos.push(faceNo);
+    }
   }
 
-  if (rows.length === 0) return;
+  if (toInsert.length > 0) {
+    const { error: insertError } = await supabase.from("warehouse_faces").insert(toInsert);
+    if (insertError) throw new Error(insertError.message);
+  }
 
-  const { error: insertError } = await supabase.from("warehouse_faces").insert(rows);
-  if (insertError) throw new Error(insertError.message);
+  if (toUpdateFaceNos.length > 0) {
+    const { error: updateError } = await supabase
+      .from("warehouse_faces")
+      .update({
+        bay_count: DEFAULT_BAY_COUNT,
+        level_count: DEFAULT_LEVEL_COUNT,
+      })
+      .eq("org_id", orgId)
+      .in("face_no", toUpdateFaceNos);
+    if (updateError) throw new Error(updateError.message);
+  }
 }
 
 async function ensureVirtualLocations(

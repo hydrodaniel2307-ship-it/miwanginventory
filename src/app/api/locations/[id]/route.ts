@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/admin";
-import { getOrgContext } from "@/lib/org-context";
+import { requireOrgContext } from "@/lib/org-context";
 import { buildLocationAliases } from "@/lib/location-aliases";
 import { getWarehouseLocations } from "@/lib/location-system";
 
@@ -11,10 +11,11 @@ type Params = {
 };
 
 export async function GET(_: Request, { params }: Params) {
-  const context = await getOrgContext();
-  if (!context) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const auth = await requireOrgContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { context } = auth;
 
   const { id } = await params;
   if (!id) {
@@ -33,19 +34,17 @@ export async function GET(_: Request, { params }: Params) {
 
   const aliases = buildLocationAliases(location);
   const supabase = createClient();
+  const baseQuery = () =>
+    supabase
+      .from("inventory")
+      .select("id, quantity, min_quantity, location, updated_at, products(id, name, sku)")
+      .order("updated_at", { ascending: false });
 
-  let inventoryQuery = supabase
-    .from("inventory")
-    .select("id, quantity, min_quantity, location, updated_at, products(id, name, sku)")
-    .order("updated_at", { ascending: false });
-
-  if (aliases.length <= 1) {
-    inventoryQuery = inventoryQuery.eq("location", aliases[0] ?? location.code);
-  } else {
-    inventoryQuery = inventoryQuery.in("location", aliases);
-  }
-
-  const { data: items, error: itemsError } = await inventoryQuery;
+  const targetLocationCode = aliases[0] ?? location.code;
+  const { data: items, error: itemsError } =
+    aliases.length <= 1
+      ? await baseQuery().eq("location", targetLocationCode)
+      : await baseQuery().in("location", aliases);
 
   if (itemsError) {
     return NextResponse.json({ error: itemsError.message }, { status: 500 });
@@ -72,4 +71,3 @@ export async function GET(_: Request, { params }: Params) {
     },
   });
 }
-

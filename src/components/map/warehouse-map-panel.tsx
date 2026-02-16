@@ -64,16 +64,6 @@ type Draft = { quantity: number; min_quantity: number };
 
 // ── Constants ─────────────────────────────────────────────────────
 
-/** Physical shelf units from LEFT → RIGHT on the floor plan */
-const SHELF_UNITS: { north: number | null; south: number | null }[] = [
-  { north: 11, south: null },
-  { north: 9, south: 10 },
-  { north: 7, south: 8 },
-  { north: 5, south: 6 },
-  { north: 3, south: 4 },
-  { north: 1, south: 2 },
-];
-
 const faceLetter = (n: number) => String.fromCharCode(64 + n);
 
 // ── Cell status helper ────────────────────────────────────────────
@@ -121,7 +111,13 @@ const statusConfig: Record<
 };
 
 // ── Component ─────────────────────────────────────────────────────
-export function WarehouseMapPanel() {
+export function WarehouseMapPanel({
+  temperature,
+  onTemperatureChange,
+}: {
+  temperature?: number;
+  onTemperatureChange?: (temp: number) => void;
+}) {
   const [locations, setLocations] = useState<WarehouseLocation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [inventorySummary, setInventorySummary] = useState<
@@ -182,7 +178,7 @@ export function WarehouseMapPanel() {
           setInventorySummary(map);
         }
       } catch {
-        // Silently fail — summary is a nice-to-have
+        // Silently fail - summary is a nice-to-have
       }
     },
     []
@@ -207,9 +203,7 @@ export function WarehouseMapPanel() {
   const faceGrid = useCallback(
     (faceNo: number) => {
       const locs = faceMap.get(faceNo) || [];
-      const maxBay = Math.max(2, ...locs.map((l) => l.bay_no ?? 0));
-      const maxLevel = Math.max(4, ...locs.map((l) => l.level_no ?? 0));
-      return { bays: maxBay, levels: maxLevel, locations: locs };
+      return { bays: 10, levels: 4, locations: locs };
     },
     [faceMap]
   );
@@ -371,103 +365,13 @@ export function WarehouseMapPanel() {
           </p>
           {summary && summary.itemCount > 0 ? (
             <p className={cfg.text}>
-              {summary.itemCount}종 · 총 {summary.totalQty}개
+              {summary.itemCount}종 - 총 {summary.totalQty}개
             </p>
           ) : (
             <p className="text-muted-foreground">비어있음</p>
           )}
         </TooltipContent>
       </Tooltip>
-    );
-  }
-
-  // ── Render: single rack face ──
-  function renderRackFace(faceNo: number) {
-    const { bays, levels, locations: locs } = faceGrid(faceNo);
-    const letter = faceLetter(faceNo);
-    const hasLocations = locs.length > 0;
-
-    return (
-      <div className="flex flex-col items-center">
-        {/* Face number label */}
-        <div
-          className={cn(
-            "mb-1.5 flex size-7 items-center justify-center rounded-md text-xs font-bold",
-            hasLocations
-              ? "bg-primary/10 text-primary"
-              : "bg-muted text-muted-foreground"
-          )}
-        >
-          {faceNo}
-        </div>
-
-        {/* Cell grid */}
-        <div
-          className="grid gap-[3px]"
-          style={{
-            gridTemplateColumns: `repeat(${bays}, minmax(32px, 1fr))`,
-          }}
-        >
-          {/* Render from top level to bottom */}
-          {Array.from({ length: levels }, (_, levelIdx) => {
-            const level = levels - levelIdx; // top-down display
-            return Array.from({ length: bays }, (_, bayIdx) => {
-              const bay = bayIdx + 1;
-              const loc =
-                locs.find((l) => l.bay_no === bay && l.level_no === level) ??
-                null;
-              return renderCell(loc, bayIdx, levelIdx);
-            });
-          })}
-        </div>
-
-        {/* Face letter */}
-        <div className="mt-1.5 text-[10px] font-medium text-muted-foreground">
-          {letter}열
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render: rack pair ──
-  function renderRackPair(
-    northFace: number | null,
-    southFace: number | null,
-    aisleNumber: number | null,
-    index: number
-  ) {
-    const isStandalone = southFace === null;
-
-    return (
-      <div key={index} className="flex flex-col items-center gap-1">
-        {/* Rack unit container */}
-        <div
-          className={cn(
-            "flex gap-2 rounded-lg border bg-card/50 p-2 shadow-sm",
-            "transition-colors hover:bg-card/80"
-          )}
-        >
-          {/* North face (left/top in pair) */}
-          {northFace !== null && renderRackFace(northFace)}
-
-          {/* Divider between paired faces */}
-          {!isStandalone && (
-            <div className="flex items-center">
-              <div className="h-full w-px bg-border" />
-            </div>
-          )}
-
-          {/* South face (right/bottom in pair) */}
-          {southFace !== null && renderRackFace(southFace)}
-        </div>
-
-        {/* Aisle number below */}
-        {aisleNumber !== null && (
-          <span className="text-xs font-semibold text-muted-foreground">
-            {aisleNumber}
-          </span>
-        )}
-      </div>
     );
   }
 
@@ -511,38 +415,56 @@ export function WarehouseMapPanel() {
           </div>
 
           {/* Floor plan body */}
-          <div className="min-w-[780px] p-5">
-            <div className="flex items-start gap-4">
-              {/* Rack units (left to right matching floor plan) */}
-              <div className="flex flex-1 items-start justify-center gap-3">
-                {SHELF_UNITS.map((unit, i) =>
-                  renderRackPair(
-                    unit.north,
-                    unit.south,
-                    unit.south, // aisle number = south face number (even)
-                    i
-                  )
-                )}
-              </div>
-
-              {/* Cold storage area (시쿠신/냉장) */}
-              <div className="flex flex-col items-center">
-                <div
-                  className={cn(
-                    "flex h-[200px] w-[80px] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed",
-                    "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/30"
-                  )}
-                >
-                  <Snowflake className="size-5 text-sky-500" />
-                  <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">
-                    냉장고
+          <div className="min-w-[600px] p-5">
+            <div className="flex flex-col gap-2">
+              {/* 11 face rows rendered sequentially */}
+              {Array.from({ length: 11 }, (_, i) => i + 1).map((faceNo) => (
+                <div key={faceNo} className="flex items-center gap-2">
+                  {/* Face label */}
+                  <div
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-bold",
+                      faceMap.has(faceNo)
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    F{faceNo}
+                  </div>
+                  {/* Cell grid for this face */}
+                  {(() => {
+                    const { bays, levels, locations: locs } = faceGrid(faceNo);
+                    return (
+                      <div
+                        className="grid flex-1 gap-[3px]"
+                        style={{
+                          gridTemplateColumns: `repeat(${bays}, minmax(28px, 1fr))`,
+                        }}
+                      >
+                        {Array.from({ length: levels }, (_, levelIdx) => {
+                          const level = levels - levelIdx;
+                          return Array.from({ length: bays }, (_, bayIdx) => {
+                            const bay = bayIdx + 1;
+                            const loc =
+                              locs.find(
+                                (l) =>
+                                  l.bay_no === bay && l.level_no === level
+                              ) ?? null;
+                            return renderCell(loc, bayIdx, levelIdx);
+                          });
+                        })}
+                      </div>
+                    );
+                  })()}
+                  {/* Face letter */}
+                  <span className="w-6 shrink-0 text-center text-[10px] font-medium text-muted-foreground">
+                    {faceLetter(faceNo)}열
                   </span>
-                  <span className="text-[10px] text-sky-500/70">시쿠신</span>
                 </div>
-              </div>
+              ))}
             </div>
 
-            {/* Bottom row: entrance + info */}
+            {/* Bottom row: entrance + cold storage */}
             <div className="mt-4 flex items-center justify-between">
               <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-1.5">
                 <DoorOpen className="size-3.5 text-muted-foreground" />
@@ -551,13 +473,16 @@ export function WarehouseMapPanel() {
                 </span>
               </div>
 
-              <div className="rounded-md border bg-muted/50 px-3 py-1.5">
-                <p className="text-[10px] text-muted-foreground">
-                  정식품 총 20 다른
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  장영신 과쉬류 만시
-                </p>
+              <div
+                className={cn(
+                  "flex items-center gap-2 rounded-md border-2 border-dashed px-3 py-1.5",
+                  "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/30"
+                )}
+              >
+                <Snowflake className="size-3.5 text-sky-500" />
+                <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                  냉장고
+                </span>
               </div>
             </div>
           </div>

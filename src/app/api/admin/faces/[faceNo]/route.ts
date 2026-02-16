@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrgContext, isAdminRole } from "@/lib/org-context";
+import { requireAdminOrgContext } from "@/lib/org-context";
 import {
   FACE_MAX,
   FACE_MIN,
@@ -14,17 +14,11 @@ type Params = {
 };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const context = await getOrgContext();
-  if (!context) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const auth = await requireAdminOrgContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-
-  if (!isAdminRole(context.session.role)) {
-    return NextResponse.json(
-      { error: "관리자 권한이 필요합니다." },
-      { status: 403 }
-    );
-  }
+  const { context } = auth;
 
   const { faceNo: faceNoParam } = await params;
   const faceNo = Number(faceNoParam);

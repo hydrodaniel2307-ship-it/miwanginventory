@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/admin";
-import { getOrgContext, isAdminRole } from "@/lib/org-context";
+import { requireAdminOrgContext } from "@/lib/org-context";
 
 type Params = {
   params: Promise<{
@@ -16,17 +16,11 @@ type UpdatePayload = {
 };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const context = await getOrgContext();
-  if (!context) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const auth = await requireAdminOrgContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-
-  if (!isAdminRole(context.session.role)) {
-    return NextResponse.json(
-      { error: "관리자 권한이 필요합니다." },
-      { status: 403 }
-    );
-  }
+  const { context } = auth;
 
   const { id } = await params;
   if (!id) {
@@ -94,6 +88,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     .from("products")
     .update(update)
     .eq("id", id)
+    .eq("org_id", context.orgId)
     .select("id, name, sku, units_per_box, active, created_at, updated_at")
     .single();
 

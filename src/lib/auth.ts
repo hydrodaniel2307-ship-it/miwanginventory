@@ -6,9 +6,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const SESSION_COOKIE = "miwang-session";
 const BOOTSTRAP_ADMIN_ID = "ceo";
-const BOOTSTRAP_ADMIN_PASSWORD = "miwang2704";
 const BOOTSTRAP_ADMIN_ROLE = "CEO";
-const FALLBACK_SESSION_SECRET = "miwang-bootstrap-session-secret-v1";
 
 type Account = { password: string; role: string };
 
@@ -26,14 +24,24 @@ function mapAuthConfigError(error: unknown): string {
 }
 
 function getAccounts(): Record<string, Account> {
-  const accounts: Record<string, Account> = {
-    [BOOTSTRAP_ADMIN_ID]: {
-      password: BOOTSTRAP_ADMIN_PASSWORD,
+  const accounts: Record<string, Account> = {};
+
+  // Bootstrap admin from env (no longer hardcoded)
+  const bootstrapPw = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+  if (bootstrapPw) {
+    accounts[BOOTSTRAP_ADMIN_ID] = {
+      password: bootstrapPw,
       role: BOOTSTRAP_ADMIN_ROLE,
-    },
-  };
+    };
+  }
 
   const raw = process.env.AUTH_CREDENTIALS;
+  if (!raw && !bootstrapPw) {
+    throw new Error(
+      "AUTH_CREDENTIALS or BOOTSTRAP_ADMIN_PASSWORD must be set. " +
+        "No login accounts are configured."
+    );
+  }
   if (!raw) return accounts;
 
   for (const entry of raw.split(",")) {
@@ -43,19 +51,18 @@ function getAccounts(): Record<string, Account> {
     }
   }
 
-  // Hard guarantee: bootstrap admin must always be available.
-  accounts[BOOTSTRAP_ADMIN_ID] = {
-    password: BOOTSTRAP_ADMIN_PASSWORD,
-    role: BOOTSTRAP_ADMIN_ROLE,
-  };
-
   return accounts;
 }
 
 function getSecret(): string {
   const secret = process.env.SESSION_SECRET;
-  if (secret) return secret;
-  return FALLBACK_SESSION_SECRET;
+  if (!secret) {
+    throw new Error(
+      "SESSION_SECRET env var is required. " +
+        "Generate one with: openssl rand -hex 32"
+    );
+  }
+  return secret;
 }
 
 function hmacSign(payload: string): string {

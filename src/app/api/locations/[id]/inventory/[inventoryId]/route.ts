@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/admin";
-import { getOrgContext, isAdminRole } from "@/lib/org-context";
-import { buildLocationAliases } from "@/lib/location-aliases";
+import { requireAdminOrgContext } from "@/lib/org-context";
+import { buildLocationAliases, toCanonicalLocationCode } from "@/lib/location-aliases";
 import { getWarehouseLocations } from "@/lib/location-system";
+import { isMissingColumnError } from "@/lib/supabase-errors";
 
 type Params = {
   params: Promise<{
@@ -17,17 +18,11 @@ type UpdatePayload = {
 };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const context = await getOrgContext();
-  if (!context) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const auth = await requireAdminOrgContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-
-  if (!isAdminRole(context.session.role)) {
-    return NextResponse.json(
-      { error: "관리자 권한이 필요합니다." },
-      { status: 403 }
-    );
-  }
+  const { context } = auth;
 
   const { id: locationId, inventoryId } = await params;
   if (!locationId || !inventoryId) {
@@ -90,11 +85,28 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const supabase = createClient();
 
-  const { data: inventory, error: inventoryError } = await supabase
-    .from("inventory")
-    .select("id, location")
-    .eq("id", inventoryId)
-    .single();
+  const lookupWithOrg = () =>
+    supabase
+      .from("inventory")
+      .select("id, location")
+      .eq("id", inventoryId)
+      .eq("org_id", context.orgId)
+      .maybeSingle();
+
+  const lookupWithoutOrg = () =>
+    supabase
+      .from("inventory")
+      .select("id, location")
+      .eq("id", inventoryId)
+      .maybeSingle();
+
+  let { data: inventory, error: inventoryError } = await lookupWithOrg();
+
+  if (inventoryError && isMissingColumnError(inventoryError, "inventory", "org_id")) {
+    const fallback = await lookupWithoutOrg();
+    inventory = fallback.data;
+    inventoryError = fallback.error;
+  }
 
   if (inventoryError || !inventory) {
     return NextResponse.json(
@@ -104,7 +116,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const aliases = buildLocationAliases(location);
-  if (!aliases.includes(inventory.location ?? "")) {
+  const normalizedAliasSet = new Set(
+    aliases.map((value) => toCanonicalLocationCode(value).toUpperCase())
+  );
+  const normalizedInventoryLocation = toCanonicalLocationCode(
+    inventory.location ?? ""
+  ).toUpperCase();
+
+  if (!normalizedAliasSet.has(normalizedInventoryLocation)) {
     return NextResponse.json(
       { error: "해당 위치에 속한 재고 항목이 아닙니다." },
       { status: 400 }
@@ -113,17 +132,37 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   update.location = location.code;
 
-  const { data, error } = await supabase
-    .from("inventory")
-    .update(update)
-    .eq("id", inventoryId)
-    .select("id, quantity, min_quantity, updated_at, location")
-    .single();
+  const updateWithOrg = () =>
+    supabase
+      .from("inventory")
+      .update(update)
+      .eq("id", inventoryId)
+      .eq("org_id", context.orgId)
+      .select("id, quantity, min_quantity, updated_at, location")
+      .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const updateWithoutOrg = () =>
+    supabase
+      .from("inventory")
+      .update(update)
+      .eq("id", inventoryId)
+      .select("id, quantity, min_quantity, updated_at, location")
+      .maybeSingle();
+
+  let { data, error } = await updateWithOrg();
+
+  if (error && isMissingColumnError(error, "inventory", "org_id")) {
+    const fallback = await updateWithoutOrg();
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error || !data) {
+    return NextResponse.json(
+      { error: error?.message ?? "재고 업데이트에 실패했습니다." },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ data });
 }
-

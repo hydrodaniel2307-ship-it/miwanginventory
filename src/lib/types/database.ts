@@ -99,6 +99,9 @@ export type WarehouseLocation = {
 export type WarehouseMapLayout = {
   id: string;
   org_id: string;
+  warehouse_id: string;
+  version: number;
+  layout_json: import("@/lib/map-layout").DecorItem[];
   layout_data: import("@/lib/map-layout").DecorItem[];
   updated_by?: string | null;
   created_at: string;
@@ -113,4 +116,27 @@ export type WarehouseSettings = {
   updated_at: string;
   updated_by?: string | null;
   created_at: string;
+};
+
+export type WarehouseCell = {
+  id: string;
+  org_id: string;
+  location_id?: string | null;
+  face_no?: number | null;
+  bay_no?: number | null;
+  level_no?: number | null;
+  pos_x: number;
+  pos_y: number;
+  pos_z: number;
+  width: number;
+  height: number;
+  depth: number;
+  cell_type: 'shelf' | 'cold' | 'empty' | 'reserved';
+  label?: string | null;
+  color?: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  updated_by?: string | null;
 };

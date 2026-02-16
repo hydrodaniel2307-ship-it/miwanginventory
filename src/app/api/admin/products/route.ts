@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/admin";
-import { getOrgContext, isAdminRole } from "@/lib/org-context";
+import { requireAdminOrgContext } from "@/lib/org-context";
 
 type CreateProductPayload = {
   name?: string;
@@ -10,17 +10,11 @@ type CreateProductPayload = {
 };
 
 export async function GET(request: NextRequest) {
-  const context = await getOrgContext();
-  if (!context) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const auth = await requireAdminOrgContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-
-  if (!isAdminRole(context.session.role)) {
-    return NextResponse.json(
-      { error: "관리자 권한이 필요합니다." },
-      { status: 403 }
-    );
-  }
+  const { context } = auth;
 
   const q = (request.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
   const supabase = createClient();
@@ -28,6 +22,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from("products")
     .select("id, name, sku, units_per_box, active, created_at, updated_at")
+    .eq("org_id", context.orgId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -46,17 +41,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const context = await getOrgContext();
-  if (!context) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const auth = await requireAdminOrgContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-
-  if (!isAdminRole(context.session.role)) {
-    return NextResponse.json(
-      { error: "관리자 권한이 필요합니다." },
-      { status: 403 }
-    );
-  }
+  const { context } = auth;
 
   let payload: CreateProductPayload;
   try {
@@ -90,6 +79,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from("products")
     .insert({
+      org_id: context.orgId,
       name,
       sku,
       units_per_box: unitsPerBox,
