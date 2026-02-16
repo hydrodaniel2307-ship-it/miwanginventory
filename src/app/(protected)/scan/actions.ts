@@ -39,6 +39,7 @@ export async function lookupBySku(
     data: {
       product: {
         id: product.id,
+        org_id: product.org_id,
         name: product.name,
         sku: product.sku,
         description: product.description,

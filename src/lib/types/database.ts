@@ -1,5 +1,6 @@
 export type Product = {
   id: string;
+  org_id: string;
   name: string;
   sku: string;
   description?: string;
@@ -15,6 +16,7 @@ export type Product = {
 
 export type Category = {
   id: string;
+  org_id: string;
   name: string;
   description?: string;
   created_at: string;
@@ -23,6 +25,7 @@ export type Category = {
 
 export type Inventory = {
   id: string;
+  org_id: string;
   product_id: string;
   quantity: number;
   min_quantity: number;
@@ -33,6 +36,7 @@ export type Inventory = {
 
 export type Order = {
   id: string;
+  org_id: string;
   order_number: string;
   type: "purchase" | "sale";
   status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
@@ -46,6 +50,7 @@ export type Order = {
 
 export type OrderItem = {
   id: string;
+  org_id: string;
   order_id: string;
   product_id: string;
   quantity: number;
@@ -55,6 +60,7 @@ export type OrderItem = {
 
 export type Supplier = {
   id: string;
+  org_id: string;
   name: string;
   contact_name?: string;
   email?: string;
@@ -88,4 +94,23 @@ export type WarehouseLocation = {
   display_name?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type WarehouseMapLayout = {
+  id: string;
+  org_id: string;
+  layout_data: import("@/lib/map-layout").DecorItem[];
+  updated_by?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WarehouseSettings = {
+  id: string;
+  org_id: string;
+  key: string;
+  value: Record<string, unknown>;
+  updated_at: string;
+  updated_by?: string | null;
+  created_at: string;
 };
