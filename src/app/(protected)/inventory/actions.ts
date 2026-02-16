@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/admin";
 import { isMissingColumnError } from "@/lib/supabase-errors";
+import { toCanonicalLocationCode } from "@/lib/location-aliases";
 
 export type InventoryRow = {
   id: string;
@@ -120,10 +121,13 @@ export async function updateMinQuantity(id: string, minQuantity: number) {
 }
 
 export async function updateLocation(id: string, location: string) {
+  const raw = location.trim();
+  const normalized = raw ? toCanonicalLocationCode(raw).toUpperCase() : null;
+
   const supabase = createClient();
   const { error } = await supabase
     .from("inventory")
-    .update({ location: location.trim() || null })
+    .update({ location: normalized })
     .eq("id", id);
 
   if (error) return { error: error.message };

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v4";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
+import { toCanonicalLocationCode } from "@/lib/location-aliases";
 import {
   Dialog,
   DialogContent,
@@ -87,10 +88,15 @@ export function AddInventoryDialog({
   async function onSubmit(values: FormValues) {
     startTransition(async () => {
       try {
+        const payload = {
+          ...values,
+          location_code: toCanonicalLocationCode(values.location_code).toUpperCase(),
+        };
+
         const res = await fetch("/api/admin/inventory", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         });
 
         const data = await res.json();

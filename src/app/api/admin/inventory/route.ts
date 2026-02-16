@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/admin";
 import { requireAdminOrgContext } from "@/lib/org-context";
 import { z } from "zod/v4";
 import { getWarehouseLocations } from "@/lib/location-system";
+import { toCanonicalLocationCode } from "@/lib/location-aliases";
 
 // Location code format: F01-B03-L2 (Face-Bay-Level)
 const LOCATION_CODE_REGEX = /^F\d{2}-B\d{2}-L\d{1,2}$/;
@@ -27,18 +28,32 @@ const createInventorySchema = z.object({
     .default(0),
 });
 
+function normalizeLocationCode(raw: string): string | null {
+  const canonical = toCanonicalLocationCode(raw).toUpperCase();
+  if (!LOCATION_CODE_REGEX.test(canonical)) return null;
+  return canonical;
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAdminOrgContext();
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  const { context } = auth;
 
   const supabase = createClient();
   const locationCodeFilter = request.nextUrl.searchParams.get("location_code");
+  const canonicalFilter = locationCodeFilter
+    ? normalizeLocationCode(locationCodeFilter.trim())
+    : null;
 
-  // Build base query with joins
-  let query = supabase
+  if (locationCodeFilter && !canonicalFilter) {
+    return NextResponse.json(
+      { error: "위치 코드 형식이 올바르지 않습니다 (예: F01-B03-L2)." },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await supabase
     .from("inventory")
     .select(
       `
@@ -51,57 +66,49 @@ export async function GET(request: NextRequest) {
       products(id, name, sku, unit_price, cost_price, image_url)
     `
     )
-    .eq("org_id", context.orgId)
     .order("updated_at", { ascending: false });
-
-  // Apply location filter if provided
-  if (locationCodeFilter) {
-    const trimmed = locationCodeFilter.trim();
-    if (!LOCATION_CODE_REGEX.test(trimmed)) {
-      return NextResponse.json(
-        { error: "위치 코드 형식이 올바르지 않습니다 (예: F01-B03-L2)." },
-        { status: 400 }
-      );
-    }
-    query = query.eq("location", trimmed);
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Map the response to include product details
-  const mapped = (data ?? []).map((row) => {
-    const product = row.products as unknown as {
-      id: string;
-      name: string;
-      sku: string;
-      unit_price: number;
-      cost_price: number;
-      image_url: string | null;
-    } | null;
+  const mapped = (data ?? [])
+    .map((row) => {
+      const product = row.products as unknown as {
+        id: string;
+        name: string;
+        sku: string;
+        unit_price: number;
+        cost_price: number;
+        image_url: string | null;
+      } | null;
 
-    return {
-      id: row.id,
-      quantity: row.quantity,
-      min_quantity: row.min_quantity,
-      location_code: row.location,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      product: product
-        ? {
-            id: product.id,
-            name: product.name,
-            sku: product.sku,
-            unit_price: product.unit_price,
-            cost_price: product.cost_price,
-            image_url: product.image_url,
-          }
-        : null,
-    };
-  });
+      const normalizedLocation = row.location
+        ? normalizeLocationCode(row.location)
+        : null;
+
+      return {
+        id: row.id,
+        quantity: row.quantity,
+        min_quantity: row.min_quantity,
+        location_code: normalizedLocation,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        product: product
+          ? {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              unit_price: product.unit_price,
+              cost_price: product.cost_price,
+              image_url: product.image_url,
+            }
+          : null,
+      };
+    })
+    .filter((row) =>
+      canonicalFilter ? row.location_code === canonicalFilter : true
+    );
 
   return NextResponse.json({ data: mapped });
 }
@@ -134,16 +141,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { product_id, location_code, quantity, min_quantity } = parsed.data;
+  const { product_id, quantity, min_quantity } = parsed.data;
+  const location_code = normalizeLocationCode(parsed.data.location_code);
+  if (!location_code) {
+    return NextResponse.json(
+      { error: "위치 코드 형식이 올바르지 않습니다 (예: F01-B03-L2)." },
+      { status: 400 }
+    );
+  }
+
   const supabase = createClient();
 
-  // 1. Validate that product exists and belongs to this org
+  // 1) Validate product exists
   const { data: product, error: productError } = await supabase
     .from("products")
     .select("id, name, sku")
     .eq("id", product_id)
-    .eq("org_id", context.orgId)
-    .single();
+    .maybeSingle();
 
   if (productError || !product) {
     return NextResponse.json(
@@ -152,10 +166,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 2. Validate that location exists and is active
+  // 2) Validate that location exists and is active
   const locations = await getWarehouseLocations(context.orgId);
   const location = locations.find(
-    (loc) => loc.code === location_code && loc.active
+    (loc) => normalizeLocationCode(loc.code) === location_code && loc.active
   );
 
   if (!location) {
@@ -165,24 +179,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 3. Check if inventory item already exists for this product
+  // 3) Upsert-like behavior by product_id
   const { data: existing, error: existingError } = await supabase
     .from("inventory")
-    .select("id, location, quantity")
+    .select("id")
     .eq("product_id", product_id)
-    .eq("org_id", context.orgId)
     .maybeSingle();
 
   if (existingError) {
-    return NextResponse.json(
-      { error: existingError.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
   }
 
-  // 4. If inventory exists, update it; otherwise create new
   if (existing) {
-    // Update existing inventory item
     const { data: updated, error: updateError } = await supabase
       .from("inventory")
       .update({
@@ -204,9 +212,9 @@ export async function POST(request: NextRequest) {
       )
       .single();
 
-    if (updateError) {
+    if (updateError || !updated) {
       return NextResponse.json(
-        { error: updateError.message },
+        { error: updateError?.message ?? "재고 업데이트에 실패했습니다." },
         { status: 500 }
       );
     }
@@ -218,7 +226,7 @@ export async function POST(request: NextRequest) {
       unit_price: number;
       cost_price: number;
       image_url: string | null;
-    };
+    } | null;
 
     return NextResponse.json(
       {
@@ -226,28 +234,28 @@ export async function POST(request: NextRequest) {
           id: updated.id,
           quantity: updated.quantity,
           min_quantity: updated.min_quantity,
-          location_code: updated.location,
+          location_code: normalizeLocationCode(updated.location ?? ""),
           created_at: updated.created_at,
           updated_at: updated.updated_at,
-          product: {
-            id: productData.id,
-            name: productData.name,
-            sku: productData.sku,
-            unit_price: productData.unit_price,
-            cost_price: productData.cost_price,
-            image_url: productData.image_url,
-          },
+          product: productData
+            ? {
+                id: productData.id,
+                name: productData.name,
+                sku: productData.sku,
+                unit_price: productData.unit_price,
+                cost_price: productData.cost_price,
+                image_url: productData.image_url,
+              }
+            : null,
         },
       },
       { status: 200 }
     );
   }
 
-  // Create new inventory item
   const { data: created, error: createError } = await supabase
     .from("inventory")
     .insert({
-      org_id: context.orgId,
       product_id,
       location: location_code,
       quantity,
@@ -266,8 +274,11 @@ export async function POST(request: NextRequest) {
     )
     .single();
 
-  if (createError) {
-    return NextResponse.json({ error: createError.message }, { status: 500 });
+  if (createError || !created) {
+    return NextResponse.json(
+      { error: createError?.message ?? "재고 생성에 실패했습니다." },
+      { status: 500 }
+    );
   }
 
   const productData = created.products as unknown as {
@@ -277,7 +288,7 @@ export async function POST(request: NextRequest) {
     unit_price: number;
     cost_price: number;
     image_url: string | null;
-  };
+  } | null;
 
   return NextResponse.json(
     {
@@ -285,17 +296,19 @@ export async function POST(request: NextRequest) {
         id: created.id,
         quantity: created.quantity,
         min_quantity: created.min_quantity,
-        location_code: created.location,
+        location_code: normalizeLocationCode(created.location ?? ""),
         created_at: created.created_at,
         updated_at: created.updated_at,
-        product: {
-          id: productData.id,
-          name: productData.name,
-          sku: productData.sku,
-          unit_price: productData.unit_price,
-          cost_price: productData.cost_price,
-          image_url: productData.image_url,
-        },
+        product: productData
+          ? {
+              id: productData.id,
+              name: productData.name,
+              sku: productData.sku,
+              unit_price: productData.unit_price,
+              cost_price: productData.cost_price,
+              image_url: productData.image_url,
+            }
+          : null,
       },
     },
     { status: 201 }

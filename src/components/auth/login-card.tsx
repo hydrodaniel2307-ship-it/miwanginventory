@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -30,7 +29,6 @@ interface LoginCardProps {
 }
 
 export function LoginCard({ sessionExpired }: LoginCardProps) {
-  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -87,12 +85,11 @@ export function LoginCard({ sessionExpired }: LoginCardProps) {
         return;
       }
 
-      // Success animation
+      // Success animation → full page navigation to ensure cookie is sent
       setIsSuccess(true);
       toast.success("로그인 성공");
       setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }, 800);
     } catch {
       toast.error("로그인 중 오류가 발생했습니다");
@@ -113,8 +110,7 @@ export function LoginCard({ sessionExpired }: LoginCardProps) {
       setIsSuccess(true);
       toast.success("데모 계정으로 로그인되었습니다");
       setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }, 800);
     } catch {
       toast.error("로그인 중 오류가 발생했습니다");
