@@ -363,6 +363,7 @@ export function WarehouseMap3D({
           height: cellInfo.height ?? 0.8,
           depth: cellInfo.depth ?? 1.2,
           cell_type: 'shelf',
+          zone: 'ambient',
           label: null,
           color: null,
           code: locationCode, // Store location code here for API queries

@@ -133,6 +133,7 @@ export type WarehouseCell = {
   height: number;
   depth: number;
   cell_type: 'shelf' | 'cold' | 'empty' | 'reserved';
+  zone: 'ambient' | 'cold' | 'hazmat';
   label?: string | null;
   color?: string | null;
   code?: string | null;
@@ -147,7 +148,9 @@ export type WarehouseCell = {
 export type InventoryMovement = {
   id: string;
   org_id: string;
+  tx_id?: string | null;
   item_id: string;
+  product_id?: string | null;
   from_cell_id?: string | null;
   to_cell_id?: string | null;
   quantity: number;
@@ -157,12 +160,25 @@ export type InventoryMovement = {
   created_at: string;
 };
 
+export type InventoryTransaction = {
+  id: string;
+  org_id: string;
+  tx_type: 'RECEIVE' | 'SHIP' | 'TRANSFER' | 'ADJUST' | 'COUNT';
+  status: 'pending' | 'committed' | 'rolled_back';
+  reference?: string | null;
+  notes?: string | null;
+  user_id: string;
+  created_at: string;
+  committed_at?: string | null;
+};
+
 export type StockBalance = {
   item_id: string;
   org_id: string;
   product_id: string;
   cell_id?: string | null;
   cell_code?: string | null;
+  cell_zone?: 'ambient' | 'cold' | 'hazmat' | null;
   quantity: number;
   min_quantity: number;
   product_name: string;
