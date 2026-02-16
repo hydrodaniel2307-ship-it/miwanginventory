@@ -1251,11 +1251,21 @@ function WarehouseMapViewInner() {
       return;
     }
 
-    // Build location code from cell's face_no, bay_no, level_no
-    if (cell.face_no != null && cell.bay_no != null && cell.level_no != null) {
-      const code = buildLocationCode(cell.face_no, cell.bay_no, cell.level_no);
+    // Build location code from cell's face_no, bay_no, level_no OR use cell.code if available
+    let code: string | null = null;
+
+    if (cell.code) {
+      // Prefer cell.code if it exists (set in temp cells)
+      code = cell.code;
+    } else if (cell.face_no != null && cell.bay_no != null && cell.level_no != null) {
+      // Fall back to building from coordinates
+      code = buildLocationCode(cell.face_no, cell.bay_no, cell.level_no);
+    }
+
+    if (code) {
       setInventoryLocationCode(code);
-      setInventoryCellId(cell.id);
+      // Only pass cell ID if it's a real UUID (non-empty)
+      setInventoryCellId(cell.id && cell.id.length > 0 ? cell.id : null);
       setInventoryPanelOpen(true);
     }
   }

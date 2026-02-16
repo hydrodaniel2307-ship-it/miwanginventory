@@ -111,11 +111,16 @@ export function InventoryCellPanel({
     setItems([]);
 
     try {
-      // Prefer cell_id over location_code for precision
+      // Use location_code by default
+      // Only use cell_id if it's a valid UUID (non-empty, proper format)
       const params = new URLSearchParams();
-      if (cid) {
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      if (cid && UUID_REGEX.test(cid)) {
+        // Prefer cell_id if it's a valid UUID
         params.set("cell_id", cid);
       } else {
+        // Fall back to location_code
         params.set("location_code", code);
       }
 

@@ -345,9 +345,12 @@ export function WarehouseMap3D({
 
       // For view mode (non-editor), create a temporary cell object for location lookup
       // This allows inventory panel to show even if cell doesn't exist in DB yet
+      // NOTE: Use location code as the `code` field, NOT as `id` (id must be UUID or null)
       if (cellInfo.faceNo && cellInfo.bay && cellInfo.level) {
+        const locationCode = buildLocationCode(cellInfo.faceNo, cellInfo.bay, cellInfo.level);
+
         const tempCell: WarehouseCell = {
-          id: `temp-${cellInfo.faceNo}-${cellInfo.bay}-${cellInfo.level}`,
+          id: '', // Empty string signals this is a temp cell with no DB record
           org_id: '',
           location_id: cellInfo.loc?.id ?? null,
           face_no: cellInfo.faceNo,
@@ -362,7 +365,7 @@ export function WarehouseMap3D({
           cell_type: 'shelf',
           label: null,
           color: null,
-          code: null,
+          code: locationCode, // Store location code here for API queries
           capacity: 0,
           metadata: {},
           created_at: new Date().toISOString(),

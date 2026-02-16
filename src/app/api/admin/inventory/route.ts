@@ -61,6 +61,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Validate cell_id is a proper UUID if provided
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (cellIdFilter && !UUID_REGEX.test(cellIdFilter.trim())) {
+    return NextResponse.json(
+      { error: "cell_id가 올바른 UUID 형식이 아닙니다." },
+      { status: 400 }
+    );
+  }
+
   // Build query — no embedded join (avoids PostgREST schema cache issues)
   let query = supabase
     .from("inventory")
@@ -78,9 +87,9 @@ export async function GET(request: NextRequest) {
     )
     .eq("org_id", context.orgId);
 
-  // Apply cell_id filter (preferred)
-  if (cellIdFilter) {
-    query = query.eq("cell_id", cellIdFilter);
+  // Apply cell_id filter if it's a valid UUID
+  if (cellIdFilter && UUID_REGEX.test(cellIdFilter.trim())) {
+    query = query.eq("cell_id", cellIdFilter.trim());
   }
 
   const { data, error } = await query.order("updated_at", { ascending: false });
