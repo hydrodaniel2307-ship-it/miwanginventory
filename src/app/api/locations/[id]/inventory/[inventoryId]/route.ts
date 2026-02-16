@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/admin";
 import { requireAdminOrgContext } from "@/lib/org-context";
 import { buildLocationAliases, toCanonicalLocationCode } from "@/lib/location-aliases";
 import { getWarehouseLocations } from "@/lib/location-system";
-import { isMissingColumnError } from "@/lib/supabase-errors";
 
 type Params = {
   params: Promise<{
@@ -85,28 +84,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const supabase = createClient();
 
-  const lookupWithOrg = () =>
-    supabase
-      .from("inventory")
-      .select("id, location")
-      .eq("id", inventoryId)
-      .eq("org_id", context.orgId)
-      .maybeSingle();
-
-  const lookupWithoutOrg = () =>
-    supabase
-      .from("inventory")
-      .select("id, location")
-      .eq("id", inventoryId)
-      .maybeSingle();
-
-  let { data: inventory, error: inventoryError } = await lookupWithOrg();
-
-  if (inventoryError && isMissingColumnError(inventoryError, "inventory", "org_id")) {
-    const fallback = await lookupWithoutOrg();
-    inventory = fallback.data;
-    inventoryError = fallback.error;
-  }
+  const { data: inventory, error: inventoryError } = await supabase
+    .from("inventory")
+    .select("id, location")
+    .eq("id", inventoryId)
+    .maybeSingle();
 
   if (inventoryError || !inventory) {
     return NextResponse.json(
@@ -132,30 +114,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   update.location = location.code;
 
-  const updateWithOrg = () =>
-    supabase
-      .from("inventory")
-      .update(update)
-      .eq("id", inventoryId)
-      .eq("org_id", context.orgId)
-      .select("id, quantity, min_quantity, updated_at, location")
-      .maybeSingle();
-
-  const updateWithoutOrg = () =>
-    supabase
-      .from("inventory")
-      .update(update)
-      .eq("id", inventoryId)
-      .select("id, quantity, min_quantity, updated_at, location")
-      .maybeSingle();
-
-  let { data, error } = await updateWithOrg();
-
-  if (error && isMissingColumnError(error, "inventory", "org_id")) {
-    const fallback = await updateWithoutOrg();
-    data = fallback.data;
-    error = fallback.error;
-  }
+  const { data, error } = await supabase
+    .from("inventory")
+    .update(update)
+    .eq("id", inventoryId)
+    .select("id, quantity, min_quantity, updated_at, location")
+    .maybeSingle();
 
   if (error || !data) {
     return NextResponse.json(

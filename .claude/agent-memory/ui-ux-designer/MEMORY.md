@@ -1,76 +1,104 @@
-# Miwang Inventory App - Design System & Implementation Notes
+# Miwang Inventory App - Design System & 3D Editor Notes
 
-**Status**: Day 1 Complete - All design specs delivered
-**Deliverables**:
-- DESIGN_SPECS.md (comprehensive 1000+ line spec)
-- IMPLEMENTATION_GUIDE.md (code examples and patterns)
-- COLOR_TOKENS.md (quick reference for colors)
-- RESPONSIVE_CHECKLIST.md (mobile-first testing guide)
+**Status**: Day 2 - 3D Editor UX Spec Complete
+**Latest Deliverables**:
+- **3D_EDITOR_UX_SPEC.md** (comprehensive Korean UX spec - 1500+ lines)
+  - 와이어프레임 (Wireframes) - 10개 화면
+  - 컴포넌트 목록 (Component List) - 100+ 컴포넌트
+  - 상태 모델 (State Model) - 8개 상태 다이어그램
+  - 모바일/태블릿 UX 규칙 (Responsive Rules)
+  - 검증 체크리스트 (15 checklist items)
+  - 개발자 구현 티켓 (10 implementation tickets)
 
 ## Project Stack
 - **Framework**: Next.js 16 (App Router)
 - **Styling**: Tailwind CSS v4, Shadcn UI (new-york style)
-- **State Management**: React Hook Form + Zod
+- **State Management**: React Hook Form + Zod + React Context
+- **3D Graphics**: Three.js + @react-three/fiber + @react-three/drei
 - **Icons**: Lucide React
-- **Theme**: next-themes (dark mode)
+- **Notifications**: Sonner (toasts)
 - **Backend**: Supabase (SSR)
-- **Typography**: Geist Sans (--font-geist-sans), Geist Mono (--font-geist-mono)
+
+## 3D Warehouse Editor Key Principles
+1. **5-minute completion**: Fast editing workflow optimized for warehouse staff
+2. **Change detection**: Automatic unsaved changes tracking + exit warnings
+3. **Conflict prevention**: 10-second polling for inventory changes by other users
+4. **Beginner-friendly**: Snap/grid ON by default, simple mode available
+5. **Korean-first**: All UI text in Korean, optimized for Korean keyboard
+6. **Accessible**: WCAG AA, complete keyboard navigation, screen reader support
+7. **Responsive**: Mobile (320px), tablet (768px), desktop (1024px)
 
 ## Color System (OkLch)
-**Light Mode**:
-- Background: oklch(1 0 0) - white
-- Foreground: oklch(0.145 0 0) - near-black (#252525)
-- Primary: oklch(0.205 0 0) - dark gray (#3a3a3a)
-- Primary Foreground: oklch(0.985 0 0) - almost white
-- Card/Popover: oklch(1 0 0) - white
-- Border: oklch(0.922 0 0) - light gray (#eaeaea)
-- Muted: oklch(0.97 0 0) - very light gray
-- Destructive: oklch(0.577 0.245 27.325) - red/orange
+Light Mode: white bg, dark gray text (#252525)
+Dark Mode: near-black bg (#145), almost white text
+Primary: dark gray (#3a3a3a) | Light: light gray (#f5f5f5)
+Card/Popover: white (light), dark gray (dark)
+Destructive: red/orange (oklch(0.577 0.245 27.325))
 
-**Dark Mode**:
-- Background: oklch(0.145 0 0) - near-black
-- Foreground: oklch(0.985 0 0) - almost white
-- Primary: oklch(0.922 0 0) - light gray (#f5f5f5)
-- Card/Popover: oklch(0.205 0 0) - dark gray (#3a3a3a)
-- Sidebar: oklch(0.205 0 0) - dark gray
+## 3D Editor Architecture Pattern
+- **EditorContext**: Global state (editorMode, visualMode, selectedDecorId, hasChanges)
+- **Warehouse3DScene**: Three.js canvas with InstancedMesh for performance
+- **DecorItem**: { id, kind, x, z, width, depth, height, rotationY }
+- **localStorage**: persist layout with MAP_LAYOUT_STORAGE_KEY
+- **Polling**: 10s interval to detect inventory conflicts
+- **Modals**: Save confirm, delete confirm, exit warning, conflict warning
 
-## Border Radius Scale
-- --radius-sm: calc(var(--radius) - 4px) = 4px (0.25rem)
-- --radius-md: calc(var(--radius) - 2px) = 8px (0.5rem)
-- --radius-lg: var(--radius) = 10px (0.625rem) [DEFAULT]
-- --radius-xl: calc(var(--radius) + 4px) = 14px (0.875rem)
-- --radius-2xl: calc(var(--radius) + 8px) = 18px (1.125rem)
+## Key UX Patterns
+1. **Modals**: Centered, 90% width (max 400px), escape to close
+2. **Toasts**: Sonner, top-right, colored by type (success/error/warning/info)
+3. **Touch targets**: 44x44px minimum with proper padding
+4. **Focus**: ring-2 ring-primary on all interactive elements
+5. **Loading**: Loader2 spinner + descriptive text
+6. **Responsive**: Sheet component for mobile sidebars
 
-## Existing Shadcn Components Available
-- Button, Input, Label, Card
-- Form (react-hook-form integration)
-- Avatar
-- Dropdown Menu
-- Sheet (mobile sidebar)
-- Separator
-- Tooltip
+## Keyboard Shortcuts (Complete)
+- C: copy selected object
+- Delete: delete selected object
+- Z: undo (Ctrl+Z redo)
+- A: select all
+- Escape: deselect / close modal
+- Tab: next object
+- 1: 3D view
+- 2: 2D view
+- Shift+L: light mode toggle
+- Ctrl+S: save layout
+- ?: show help
 
-## Directory Structure
-```
-src/
-├── app/
-│   ├── layout.tsx (root)
-│   ├── globals.css (design tokens)
-│   └── page.tsx (homepage)
-├── components/
-│   └── ui/ (shadcn components)
-└── lib/
-    └── utils.ts (cn() utility)
-```
+## Responsive Breakpoints
+- **Mobile**: 320-767px (bottom tab nav, 300px canvas height)
+- **Tablet**: 768-1023px (collapsed panels, pinch zoom)
+- **Desktop**: 1024px+ (side panels, full canvas)
 
-## Key Design Tokens to Reference
-- Use OkLch color variables directly: var(--primary), var(--border), etc.
-- Spacing scale: 4px (0.25rem), 8px, 12px, 16px, 24px, 32px, 48px, 64px
-- Ring color for focus: var(--ring)
-- All components use border-border and outline-ring/50 by default
+## Implementation Tickets (Priority Order)
+1. EditorContext + state management
+2. 3D object drag/rotate in canvas
+3. Save API + optimistic updates
+4. Modals (save/delete/exit/conflict)
+5. Toast notifications
+6. Conflict polling (10s interval)
+7. Keyboard shortcuts + help modal
+8. Mobile responsive layout
+9. Progress timer (5-minute tracker)
+10. E2E tests (happy path + error cases)
 
-## Accessibility Standards
-- Minimum touch target: 44x44px (8px padding around text)
-- Color contrast: WCAG AA (4.5:1 for body text, 3:1 for large text)
-- Focus indicators: Use ring-ring CSS, clearly visible in light & dark
-- Form labels must be explicitly associated with inputs
+## Design Token References
+- Spacing: 4px (0.25rem), 8px, 12px, 16px, 24px, 32px, 48px, 64px
+- Border radius: 4px, 8px, 10px (default), 14px, 18px
+- Focus color: var(--ring), contrast min 4.5:1 (AA)
+- 3D canvas height: 450-750px (responsive)
+
+## Accessibility Checklist
+- [ ] All buttons have aria-label or text
+- [ ] Form inputs have associated <label htmlFor="">
+- [ ] Modals: role="dialog" + aria-modal="true"
+- [ ] Color contrast: WCAG AA (4.5:1 text, 3:1 large)
+- [ ] Touch targets: 44x44px minimum
+- [ ] Keyboard nav: complete Tab/Shift+Tab support
+- [ ] Focus indicators: visible in light & dark modes
+- [ ] Screen reader: all dynamic content announced
+
+## File Locations
+- Editor spec: `/3D_EDITOR_UX_SPEC.md`
+- 3D components: `/src/components/map/warehouse-map-*.tsx`
+- Map layout types: `/src/lib/map-layout.ts`
+- Design specs: `/DESIGN_SPECS.md`

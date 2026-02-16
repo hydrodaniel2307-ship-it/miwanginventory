@@ -38,7 +38,21 @@
       "Bash(for pid in 76736 67924 56096 50076 6112)",
       "Bash(do taskkill //PID $pid //F)",
       "Bash(done)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm run dev:*)",
+      "Bash(cat:*)",
+      "Bash(du -sh:*)",
+      "Bash(du:*)",
+      "Bash(/c/Users/danie/Desktop/Coding/miwanginventory-app/3D_EDITOR_COMPLETION_REPORT.txt:*)",
+      "Bash(npx next lint)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run lint:*)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx eslint:*)",
+      "Bash(git diff:*)"
     ]
   }
 }
