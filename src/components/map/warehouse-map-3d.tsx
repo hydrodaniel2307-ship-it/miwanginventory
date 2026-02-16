@@ -362,6 +362,8 @@ export function WarehouseMap3D({
           cell_type: 'shelf',
           label: null,
           color: null,
+          code: null,
+          capacity: 0,
           metadata: {},
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

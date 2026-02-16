@@ -31,6 +31,7 @@ type InventoryResponse = {
 
 export type InventoryCellPanelProps = {
   locationCode: string | null;
+  cellId?: string | null;
   isOpen: boolean;
   onClose: () => void;
 };
@@ -78,6 +79,7 @@ function useInjectStyles() {
 // ── Component ──────────────────────────────────────────────────
 export function InventoryCellPanel({
   locationCode,
+  cellId,
   isOpen,
   onClose,
 }: InventoryCellPanelProps) {
@@ -103,14 +105,22 @@ export function InventoryCellPanel({
   }, [isOpen, locationCode]);
 
   // ── Fetch inventory ──
-  const fetchInventory = useCallback(async (code: string) => {
+  const fetchInventory = useCallback(async (code: string, cid?: string | null) => {
     setIsLoading(true);
     setError(null);
     setItems([]);
 
     try {
+      // Prefer cell_id over location_code for precision
+      const params = new URLSearchParams();
+      if (cid) {
+        params.set("cell_id", cid);
+      } else {
+        params.set("location_code", code);
+      }
+
       const res = await fetch(
-        `/api/admin/inventory?location_code=${encodeURIComponent(code)}`,
+        `/api/admin/inventory?${params.toString()}`,
         { cache: "no-store" }
       );
       const json = (await res.json()) as InventoryResponse;
@@ -130,9 +140,9 @@ export function InventoryCellPanel({
 
   useEffect(() => {
     if (locationCode && isOpen) {
-      fetchInventory(locationCode);
+      fetchInventory(locationCode, cellId);
     }
-  }, [locationCode, isOpen, fetchInventory]);
+  }, [locationCode, cellId, isOpen, fetchInventory]);
 
   // ── Escape key ──
   useEffect(() => {

@@ -30,6 +30,7 @@ export type Inventory = {
   quantity: number;
   min_quantity: number;
   location?: string;
+  cell_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -134,9 +135,36 @@ export type WarehouseCell = {
   cell_type: 'shelf' | 'cold' | 'empty' | 'reserved';
   label?: string | null;
   color?: string | null;
+  code?: string | null;
+  capacity: number;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   created_by?: string | null;
   updated_by?: string | null;
+};
+
+export type InventoryMovement = {
+  id: string;
+  org_id: string;
+  item_id: string;
+  from_cell_id?: string | null;
+  to_cell_id?: string | null;
+  quantity: number;
+  movement_type: 'PUTAWAY' | 'PICK' | 'TRANSFER' | 'ADJUST';
+  reason?: string | null;
+  user_id?: string | null;
+  created_at: string;
+};
+
+export type StockBalance = {
+  item_id: string;
+  org_id: string;
+  product_id: string;
+  cell_id?: string | null;
+  cell_code?: string | null;
+  quantity: number;
+  min_quantity: number;
+  product_name: string;
+  sku: string;
 };

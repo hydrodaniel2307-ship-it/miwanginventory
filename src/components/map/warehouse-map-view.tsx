@@ -1127,6 +1127,7 @@ function WarehouseMapViewInner() {
   // Inventory panel state (view mode - non-editor)
   const [inventoryPanelOpen, setInventoryPanelOpen] = useState(false);
   const [inventoryLocationCode, setInventoryLocationCode] = useState<string | null>(null);
+  const [inventoryCellId, setInventoryCellId] = useState<string | null>(null);
 
   // Editor context - destructured early so hooks below can reference editorMode
   const {
@@ -1246,6 +1247,7 @@ function WarehouseMapViewInner() {
     if (!cell) {
       setInventoryPanelOpen(false);
       setInventoryLocationCode(null);
+      setInventoryCellId(null);
       return;
     }
 
@@ -1253,6 +1255,7 @@ function WarehouseMapViewInner() {
     if (cell.face_no != null && cell.bay_no != null && cell.level_no != null) {
       const code = buildLocationCode(cell.face_no, cell.bay_no, cell.level_no);
       setInventoryLocationCode(code);
+      setInventoryCellId(cell.id);
       setInventoryPanelOpen(true);
     }
   }
@@ -1542,10 +1545,12 @@ function WarehouseMapViewInner() {
       {!editorMode && (
         <InventoryCellPanel
           locationCode={inventoryLocationCode}
+          cellId={inventoryCellId}
           isOpen={inventoryPanelOpen}
           onClose={() => {
             setInventoryPanelOpen(false);
             setInventoryLocationCode(null);
+            setInventoryCellId(null);
           }}
         />
       )}
