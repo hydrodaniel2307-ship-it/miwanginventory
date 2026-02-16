@@ -197,11 +197,21 @@ const DECOR_COLORS: Record<string, string> = {
 };
 
 const DECOR_BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
-const DECOR_MATERIAL = new THREE.MeshStandardMaterial({
+const DECOR_MATERIAL_EDITOR = new THREE.MeshStandardMaterial({
   metalness: 0.2,
   roughness: 0.55,
   transparent: true,
   opacity: 0.92,
+});
+
+// Ghost material for view mode — very low opacity, no depth write
+// so inventory cells are always visible through/above rack meshes.
+const DECOR_MATERIAL_VIEW = new THREE.MeshStandardMaterial({
+  metalness: 0.1,
+  roughness: 0.8,
+  transparent: true,
+  opacity: 0.15,
+  depthWrite: false,
 });
 
 // Hover highlight color - allocated once, reused across pointer events
@@ -598,10 +608,12 @@ function DecorObjects({
   items,
   selectedId,
   onSelect,
+  editorMode,
 }: {
   items: DecorItem[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
+  editorMode: boolean;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const invalidate = useThree((state) => state.invalidate);
@@ -630,14 +642,20 @@ function DecorObjects({
       const item = items[i];
       const isSelected = item.id === selectedId;
 
-      const width = Math.max(0.6, item.width * 0.55);
-      const depth = Math.max(0.6, item.depth * 0.55);
-      const height =
+      const widthRaw = Math.max(0.6, item.width * 0.55);
+      const depthRaw = Math.max(0.6, item.depth * 0.55);
+      const heightRaw =
         item.kind === "pallet"
           ? Math.max(0.2, item.height * 0.18)
           : item.kind === "shelf"
             ? Math.max(0.8, item.height * 0.55)
             : Math.max(0.5, item.height * 0.4);
+
+      // In view mode, shrink racks so cells/labels stay visible
+      const vs = editorMode ? 1.0 : 0.35;
+      const width = widthRaw * vs;
+      const depth = depthRaw * vs;
+      const height = heightRaw * vs;
 
       obj.position.set(item.x, height / 2, item.z);
       obj.rotation.set(0, item.rotationY, 0);
@@ -662,7 +680,30 @@ function DecorObjects({
     mesh.computeBoundingSphere();
 
     invalidate();
-  }, [items, selectedId, invalidate]);
+  }, [items, selectedId, editorMode, invalidate]);
+
+  // Swap material based on editor mode
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    mesh.material = editorMode ? DECOR_MATERIAL_EDITOR : DECOR_MATERIAL_VIEW;
+    invalidate();
+  }, [editorMode, invalidate]);
+
+  // Completely disable raycasting on DecorObjects in view mode
+  // so they never steal pointer events from ShelfCells
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    if (!editorMode) {
+      // Completely prevent this mesh from participating in raycasting
+      // so it never steals pointer events from ShelfCells
+      mesh.raycast = () => {};
+    } else {
+      // Restore default raycast for editor mode
+      mesh.raycast = THREE.InstancedMesh.prototype.raycast;
+    }
+  }, [editorMode]);
 
   const handleClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
@@ -705,11 +746,12 @@ function DecorObjects({
   return (
     <instancedMesh
       ref={meshRef}
-      args={[DECOR_BOX_GEO, DECOR_MATERIAL, maxCount]}
+      args={[DECOR_BOX_GEO, DECOR_MATERIAL_EDITOR, maxCount]}
       frustumCulled={false}
-      onClick={handleClick}
-      onPointerMove={handlePointerMove}
-      onPointerOut={handlePointerOut}
+      renderOrder={editorMode ? 1 : -1}
+      onClick={editorMode ? handleClick : undefined}
+      onPointerMove={editorMode ? handlePointerMove : undefined}
+      onPointerOut={editorMode ? handlePointerOut : undefined}
     />
   );
 }
@@ -1006,6 +1048,7 @@ function WarehouseScene({
         items={decorItems}
         selectedId={selectedDecorId}
         onSelect={onSelectDecor}
+        editorMode={editorMode}
       />
 
       {temperature != null && (
@@ -1018,6 +1061,7 @@ function WarehouseScene({
 // ── Warehouse3DScene (exported Canvas wrapper) ───────────────────────────────
 
 export function Warehouse3DScene(props: Warehouse3DSceneProps) {
+  const showRecoveryDebugBadge = process.env.NODE_ENV !== "production";
   const isBright = props.visualMode === "bright";
   const hasLocations =
     props.locations.filter((l) => l.active && !l.is_virtual).length > 0;
@@ -1119,7 +1163,9 @@ export function Warehouse3DScene(props: Warehouse3DSceneProps) {
         </div>
       )}
 
-      {contextLossCount > 0 && !recoveringContext && (
+      {showRecoveryDebugBadge &&
+        contextLossCount > 0 &&
+        !recoveringContext && (
         <div className="pointer-events-none absolute right-3 top-3 rounded-md border border-amber-400/40 bg-black/70 px-2.5 py-1 text-[10px] text-amber-300 sm:text-xs">
           3D 복구 완료 ({contextLossCount})
         </div>
